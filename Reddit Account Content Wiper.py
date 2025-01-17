@@ -1,9 +1,9 @@
-#Wipes the post and comment history of a Reddit user
-#You're allowed to want to be forgotten
-
 import requests
 from bs4 import BeautifulSoup
 import browser_cookie3
+import time
+import random
+import string
 
 # Fetch cookies from Firefox
 firefox_cookies = browser_cookie3.firefox()
@@ -11,8 +11,8 @@ firefox_cookies = browser_cookie3.firefox()
 # Define the domain for which you need cookies
 domain = ".reddit.com"
 
-# Define the target reddit username
-reddit_username = "<>"
+# Define the target Reddit username
+reddit_username = "<>>"
 
 reddit_session_cookie = ""
 csrf_token_cookie = ""
@@ -34,7 +34,7 @@ headers = {
     'Cookie': exp_cookie,
 }
 
-# Send an HTTP GET request, to return the list of posts and comments
+# Send an HTTP GET request to return the list of posts and comments
 response = requests.get(url, headers=headers)
 
 # Parse the HTML response with BeautifulSoup
@@ -46,58 +46,70 @@ elements = soup.find_all(attrs={'thing-id': True})
 if elements:
     comment_ids = [element['thing-id'] for element in elements]
 
-    while(comment_ids):
-        # Create a list of content IDs
-        print(f"{len(comment_ids)}")
+    while comment_ids:
+        print(f"{len(comment_ids)} remaining.")
 
         comment_ids = set(comment_ids)
         comment_ids = list(comment_ids)
-        # Select only unique content ID values by converting first to a set, then back to a list
 
         url = 'https://www.reddit.com/svc/shreddit/graphql'
         headers = {
             'Accept': 'application/json',
             'Accept-Language': 'en-US,en;q=0.5',
-
             'Content-Type': 'application/json',
             'Cookie': exp_cookie,
         }
 
-        # Content that starts with t1 is a comment
-        # Content that starts with t3 is a post
-        # The JSON for each is different, so they have to be handled differently
         for comment in comment_ids:
-            if comment.__contains__("t1"):
 
-                data = {
+            length = random.randint(5, 25)  # Random length between 5 and 25
+            characters = string.ascii_letters + string.digits  # All letters and digits
+            random_string = ''.join(random.choice(characters) for _ in range(length))
+
+
+            if comment.startswith("t1"):  # Comment
+                # Step 1: Overwrite the comment
+                overwrite_data = {
+                    "operation": "UpdateComment",
+                    "variables": {
+                        "input": {
+                            "commentId": comment,
+                            "content": {"markdown": f"{random_string}"}
+                        }
+                    },
+                    "csrf_token": csrf_token_cookie
+                }
+                overwrite_response = requests.post(url, headers=headers, json=overwrite_data)
+                print(f"Overwrite response for {comment}: {overwrite_response.json()}")
+
+                time.sleep(1)  # Delay between overwrite and delete
+
+                # Step 2: Delete the comment
+                delete_data = {
                     "operation": "DeleteComment",
                     "variables": {
                         "input": {
-                            "commentId": f"{comment}"
+                            "commentId": comment
                         }
                     },
                     "csrf_token": csrf_token_cookie
                 }
+                delete_response = requests.post(url, headers=headers, json=delete_data)
+                print(f"Delete response for {comment}: {delete_response.json()}")
                 comment_ids.remove(comment)
 
-            elif comment.__contains__("t3"):
-                data = {
+            elif comment.startswith("t3"):  # Post
+                delete_data = {
                     "operation": "DeletePost",
                     "variables": {
                         "input": {
-                            "postId": f"{comment}"
+                            "postId": comment
                         }
                     },
                     "csrf_token": csrf_token_cookie
                 }
+                delete_response = requests.post(url, headers=headers, json=delete_data)
+                print(f"Delete response for {comment}: {delete_response.json()}")
                 comment_ids.remove(comment)
-
-            response = requests.post(url, headers=headers, json=data)
-
-            try:
-                # Print the response, catch any errors resulting from the response not being JSON-formatted
-                print(f"Comment id: {comment} - {response.json()}")
-            except Exception as e:
-                print(f"Error processing comment '{comment} - {e}")
 else:
-    print("Reached the end of the content")
+    print("Reached the end of the content.")
